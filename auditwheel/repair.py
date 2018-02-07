@@ -61,9 +61,7 @@ def repair_wheel(wheel_path: str, abi: str, lib_sdir: str, out_dir: str,
     with InWheelCtx(wheel_path) as ctx:
         ctx.out_wheel = pjoin(out_dir, wheel_fname)
 
-        parsed_fname = WHEEL_INFO_RE(wheel_fname)
-        fparts = parsed_fname.groupdict()
-        dest_dir = fparts['name'] + lib_sdir
+        dest_dir = WHEEL_INFO_RE(wheel_fname).group('name') + lib_sdir
 
         if not exists(dest_dir):
             os.mkdir(dest_dir)
