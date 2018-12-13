@@ -245,7 +245,6 @@ def test_build_repair_multiple_top_level_modules_wheel(docker_container):
     assert len(filenames) == expected_files
 
     repaired_wheels = [fn for fn in filenames if policy in fn]
-    # Wheel picks up newer symbols when built in manylinux2010
     expected_wheel_name = (
         'multiple_top_level-1.0-cp35-cp35m-{}_x86_64.whl'
     ).format(policy)
