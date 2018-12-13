@@ -3,8 +3,10 @@ import pytest
 import os
 import os.path as op
 import tempfile
+import re
 import shutil
 import warnings
+import zipfile
 from distutils.spawn import find_executable
 import logging
 
@@ -259,3 +261,92 @@ def test_build_repair_pure_wheel(docker_container):
         'provided shared libraries.  ',
         'The wheel requires no external shared libraries! :)',
     ]) in output.replace('\n', ' ')
+
+
+def test_build_repair_multiple_top_level_modules_wheel(docker_container):
+    policy, manylinux_id, python_id, io_folder = docker_container
+    docker_exec(
+        manylinux_id,
+        [
+            'bash',
+            '-c',
+            'cd /auditwheel_src/tests/multiple_top_level '
+            '&& make '
+            '&& pip wheel . -w /io',
+        ],
+    )
+
+    filenames = os.listdir(io_folder)
+    assert filenames == ['multiple_top_level-1.0-cp35-cp35m-linux_x86_64.whl']
+    orig_wheel = filenames[0]
+    assert 'manylinux' not in orig_wheel
+
+    # Repair the wheel using the appropriate manylinux container
+    repair_command = (
+        'auditwheel repair --plat {policy}_x86_64 -w /io /io/{orig_wheel}'
+    ).format(policy=policy, orig_wheel=orig_wheel)
+    docker_exec(
+        manylinux_id,
+        [
+            'bash',
+            '-c',
+            (
+                'LD_LIBRARY_PATH='
+                '/auditwheel_src/tests/multiple_top_level/lib/a:'
+                '/auditwheel_src/tests/multiple_top_level/lib/b '
+            )
+            + repair_command,
+        ],
+    )
+    filenames = os.listdir(io_folder)
+
+    if policy == 'manylinux1':
+        expected_files = 2
+    elif policy == 'manylinux2010':
+        expected_files = 3  # We end up repairing the wheel twice to manylinux1
+
+    assert len(filenames) == expected_files
+
+    repaired_wheels = [fn for fn in filenames if policy in fn]
+    # Wheel picks up newer symbols when built in manylinux2010
+    expected_wheel_name = (
+        'multiple_top_level-1.0-cp35-cp35m-{}_x86_64.whl'
+    ).format(policy)
+    assert repaired_wheels == [expected_wheel_name]
+    repaired_wheel = repaired_wheels[0]
+    output = docker_exec(manylinux_id, 'auditwheel show /io/' + repaired_wheel)
+    assert (
+        '{wheel} is consistent'
+        ' with the following platform tag: "manylinux1_x86_64"'
+    ).format(wheel=repaired_wheel) in output.replace('\n', ' ')
+
+    # TODO: Remove once pip supports manylinux2010
+    docker_exec(
+        python_id,
+        "pip install git+https://github.com/wtolson/pip.git@manylinux2010",
+    )
+
+    docker_exec(python_id, 'pip install /io/' + repaired_wheel)
+    for mod, func, expected in [
+        ('example_a', 'example_a', '11'),
+        ('example_b', 'example_b', '110'),
+    ]:
+        output = docker_exec(
+            python_id,
+            [
+                'python',
+                '-c',
+                'from {mod} import {func}; print({func}())'.format(
+                    mod=mod, func=func
+                ),
+            ],
+        ).strip()
+        assert output.strip() == expected
+    with zipfile.ZipFile(os.path.join(io_folder, repaired_wheel)) as w:
+        for lib_name in ['liba', 'libb']:
+            assert any(
+                re.match(
+                    r'multiple_top_level.libs/{}.*\.so'.format(lib_name), name
+                )
+                for name in w.namelist()
+            )
