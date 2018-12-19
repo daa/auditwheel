@@ -1,9 +1,9 @@
-all: lib/b/libb.so lib/a/liba.so
+all: lib-src/b/libb.so lib-src/a/liba.so
 
 
-lib/b/libb.so: lib/b/b.c
-	gcc -fPIC -shared -o lib/b/libb.so lib/b/b.c
+lib-src/b/libb.so: lib-src/b/b.c
+	gcc -fPIC -shared -o lib-src/b/libb.so lib-src/b/b.c
 
 
-lib/a/liba.so: lib/b/libb.so lib/a/a.c
-	gcc -fPIC -shared -o lib/a/liba.so -Ilib/b -Llib/b -lb lib/a/a.c
+lib-src/a/liba.so: lib-src/b/libb.so lib-src/a/a.c
+	gcc -fPIC -shared -o lib-src/a/liba.so -Ilib-src/b -Llib-src/b -lb lib-src/a/a.c
