@@ -292,8 +292,8 @@ def test_build_repair_multiple_top_level_modules_wheel(docker_container):
             '-c',
             (
                 'LD_LIBRARY_PATH='
-                '/auditwheel_src/tests/multiple_top_level/lib/a:'
-                '/auditwheel_src/tests/multiple_top_level/lib/b '
+                '/auditwheel_src/tests/multiple_top_level/lib-src/a:'
+                '/auditwheel_src/tests/multiple_top_level/lib-src/b '
             )
             + repair_command,
         ],
